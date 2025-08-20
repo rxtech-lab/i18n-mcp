@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build:
@@ -15,44 +15,45 @@ jobs:
         exclude:
           - os: ubuntu-latest
             arch: arm64
-    
+
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.22'
-    
-    - name: Build
-      run: |
-        if [ "${{ matrix.os }}" == "macos-latest" ]; then
-          GOOS=darwin GOARCH=${{ matrix.arch }} go build -o i18n-mcp-darwin-${{ matrix.arch }} ./cmd/main.go
-        else
-          GOOS=linux GOARCH=${{ matrix.arch }} go build -o i18n-mcp-linux-${{ matrix.arch }} ./cmd/main.go
-        fi
-    
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: i18n-mcp-${{ matrix.os }}-${{ matrix.arch }}
-        path: i18n-mcp-*
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24"
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            make build
+            mv bin/i18n-mcp i18n-mcp-darwin-${{ matrix.arch }}
+          else
+            GOOS=linux GOARCH=${{ matrix.arch }} go build -o i18n-mcp-linux-${{ matrix.arch }} ./cmd/main.go
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-mcp-${{ matrix.os }}-${{ matrix.arch }}
+          path: i18n-mcp-*
 
   release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Download all artifacts
-      uses: actions/download-artifact@v3
-    
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          i18n-mcp-*/i18n-mcp-*
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v5
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            i18n-mcp-*/i18n-mcp-*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
