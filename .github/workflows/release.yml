@@ -1,59 +1,72 @@
-name: Release
-
+name: Release Go Binary
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  release:
+    types:
+      - created
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        arch: [amd64, arm64]
-        exclude:
-          - os: ubuntu-latest
-            arch: arm64
-
+  build-macos:
+    name: Build, Sign and Notarize macOS Binary
+    runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: "1.24"
+          check-latest: true
 
-      - name: Build
-        run: |
-          if [ "${{ matrix.os }}" == "macos-latest" ]; then
-            make build
-            mv bin/i18n-mcp i18n-mcp-darwin-${{ matrix.arch }}
-          else
-            GOOS=linux GOARCH=${{ matrix.arch }} go build -o i18n-mcp-linux-${{ matrix.arch }} ./cmd/main.go
-          fi
+      - name: Install dependencies
+        run: go mod download
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Import code signing certificates
+        uses: apple-actions/import-codesign-certs@v3
         with:
-          name: i18n-mcp-${{ matrix.os }}-${{ matrix.arch }}
-          path: i18n-mcp-*
+          p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+      - name: Build the binary
+        run: make build && ./scripts/sign.sh
+        env:
+          VERSION: ${{ github.event_name == 'release' && github.ref_name || format('dev-{0}', github.sha) }}
+          SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
+      - name: Import code installer certificates
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.INSTALLER_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+          keychain: installer
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v5
+      - name: Notarize the binary
+        run: ./scripts/package-notarize.sh
+        if: github.event_name == 'release'
+        env:
+          INSTALLER_SIGNING_CERTIFICATE_NAME: ${{ secrets.INSTALLER_SIGNING_CERTIFICATE_NAME }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PWD: ${{ secrets.APPLE_ID_PWD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Create Release
+      - name: Prepare assets for release
+        if: github.event_name == 'release'
+        run: |
+          mkdir -p assets
+          cp resume-mcp_macOS_arm64.pkg assets/resume-mcp_macOS_arm64.pkg
+
+      # Upload to release if this is a release event
+      - name: Upload binaries to release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            i18n-mcp-*/i18n-mcp-*
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            assets/resume-mcp_macOS_arm64.pkg
+          token: ${{ secrets.GITHUB_TOKEN }}
