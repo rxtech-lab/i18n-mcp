@@ -1,2 +1,4 @@
 example
 .DS_Store
+bin
+*.po

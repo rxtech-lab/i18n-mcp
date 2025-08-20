@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestScanPoFiles(t *testing.T) {
@@ -141,4 +144,117 @@ func TestScanPoFiles_CaseInsensitive(t *testing.T) {
 		t.Errorf("Expected %d .po files (case-insensitive), got %d", len(testFiles), len(poFiles))
 		t.Errorf("Found files: %v", poFiles)
 	}
+}
+
+func TestScanPoFilesWithInfo(t *testing.T) {
+	// Create a temporary directory
+	tempDir, err := os.MkdirTemp("", "po-test-with-info")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Create test PO files with different languages
+	testFiles := []struct {
+		name    string
+		content string
+		lang    string
+	}{
+		{
+			name: "en.po",
+			content: `msgid ""
+msgstr ""
+"Language: en\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Hello"
+msgstr "Hello"`,
+			lang: "en",
+		},
+		{
+			name: "fr.po",
+			content: `msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Hello"
+msgstr "Bonjour"`,
+			lang: "fr",
+		},
+		{
+			name: "zh-HK.po",
+			content: `msgid ""
+msgstr ""
+"Language: zh-HK\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Hello"
+msgstr "你好"`,
+			lang: "zh-HK",
+		},
+	}
+
+	// Create the test files
+	for _, tf := range testFiles {
+		filePath := filepath.Join(tempDir, tf.name)
+		err := os.WriteFile(filePath, []byte(tf.content), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create a non-PO file that should be ignored
+	txtFile := filepath.Join(tempDir, "readme.txt")
+	err = os.WriteFile(txtFile, []byte("This is not a PO file"), 0644)
+	require.NoError(t, err)
+
+	// Create a subdirectory with a PO file
+	subDir := filepath.Join(tempDir, "subdir")
+	err = os.MkdirAll(subDir, 0755)
+	require.NoError(t, err)
+
+	subPo := filepath.Join(subDir, "es.po")
+	err = os.WriteFile(subPo, []byte(`msgid ""
+msgstr ""
+"Language: es\n"
+
+msgid "Hello"
+msgstr "Hola"`), 0644)
+	require.NoError(t, err)
+
+	t.Run("ScanPoFilesWithInfo returns correct information", func(t *testing.T) {
+		poFiles, err := ScanPoFilesWithInfo(tempDir)
+		require.NoError(t, err)
+
+		// Should find 4 PO files (3 in root + 1 in subdir)
+		assert.Len(t, poFiles, 4)
+
+		// Create a map for easier testing
+		fileMap := make(map[string]string)
+		for _, pf := range poFiles {
+			fileMap[filepath.Base(pf.Path)] = pf.Language
+		}
+
+		// Check that languages are correctly extracted
+		assert.Equal(t, "en", fileMap["en.po"])
+		assert.Equal(t, "fr", fileMap["fr.po"])
+		assert.Equal(t, "zh-HK", fileMap["zh-HK.po"])
+		assert.Equal(t, "es", fileMap["es.po"])
+	})
+
+	t.Run("Handles PO file with parsing error gracefully", func(t *testing.T) {
+		invalidDir, err := os.MkdirTemp("", "invalid-po-test")
+		require.NoError(t, err)
+		defer os.RemoveAll(invalidDir)
+
+		// Create an invalid PO file
+		invalidPo := filepath.Join(invalidDir, "invalid.po")
+		err = os.WriteFile(invalidPo, []byte("This is not valid PO content"), 0644)
+		require.NoError(t, err)
+
+		poFiles, err := ScanPoFilesWithInfo(invalidDir)
+		require.NoError(t, err)
+		assert.Len(t, poFiles, 1)
+
+		// Language should be empty for invalid PO file
+		assert.Equal(t, "", poFiles[0].Language)
+		assert.Contains(t, poFiles[0].Path, "invalid.po")
+	})
 }

@@ -13,6 +13,12 @@ func ParsePoFile(path string) (gotext.Po, error) {
 	if err != nil {
 		return gotext.Po{}, err
 	}
-	po.ParseFile(string(fileContent))
+	po.Parse(fileContent)
+	return *po, nil
+}
+
+func ParsePoFileFromString(content string) (gotext.Po, error) {
+	po := gotext.NewPo()
+	po.Parse([]byte(content))
 	return *po, nil
 }

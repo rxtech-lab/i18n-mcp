@@ -4,6 +4,11 @@ import (
 	"github.com/leonelquinteros/gotext"
 )
 
+type UnTranslatedResult struct {
+	Language string            `json:"language"`
+	Terms    map[string]string `json:"terms"`
+}
+
 type PoService struct {
 	poFile *gotext.Po
 }
@@ -14,10 +19,14 @@ func NewPoService(poFile gotext.Po) *PoService {
 
 // ListAllUntranslated returns a map of untranslated messages up to the specified limit
 // Returns map[msgid]msgstr where msgstr is empty or same as msgid
-func (ps *PoService) ListAllUntranslated(limit int) map[string]string {
+func (ps *PoService) ListAllUntranslated(limit int) UnTranslatedResult {
 	result := make(map[string]string)
 	count := 0
 
+	// if limit is 0, then set the limit to 10
+	if limit == 0 {
+		limit = 10
+	}
 	// Get domain from Po file to access translations
 	domain := ps.poFile.GetDomain()
 	translations := domain.GetTranslations()
@@ -29,13 +38,16 @@ func (ps *PoService) ListAllUntranslated(limit int) map[string]string {
 		}
 
 		// Check if translation is not translated or empty
-		if !translation.IsTranslated() || translation.Get() == "" || translation.Get() == msgid {
-			result[msgid] = translation.Get()
+		if !translation.IsTranslated() {
+			result[msgid] = ""
 			count++
 		}
 	}
 
-	return result
+	return UnTranslatedResult{
+		Language: ps.poFile.Language,
+		Terms:    result,
+	}
 }
 
 // Translate sets a translation for a given key
