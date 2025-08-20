@@ -14,7 +14,7 @@ import (
 
 func NewGetUntranslatedTermsTool() (mcp.Tool, server.ToolHandlerFunc) {
 	tool := mcp.NewTool("getUntranslatedTerms",
-		mcp.WithDescription("Get untranslated terms from a PO file"),
+		mcp.WithDescription("Get untranslated terms from a PO file. After translating, you can use this tool to check if all terms are translated."),
 		mcp.WithString("file_path",
 			mcp.Required(),
 			mcp.Description("The path to the .po file"),
