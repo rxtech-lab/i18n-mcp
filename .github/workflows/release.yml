@@ -60,7 +60,7 @@ jobs:
         if: github.event_name == 'release'
         run: |
           mkdir -p assets
-          cp resume-mcp_macOS_arm64.pkg assets/resume-mcp_macOS_arm64.pkg
+          cp i18n-mcp_macOS_arm64.pkg assets/i18n-mcp_macOS_arm64.pkg
 
       # Upload to release if this is a release event
       - name: Upload binaries to release
@@ -68,5 +68,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            assets/resume-mcp_macOS_arm64.pkg
+            assets/i18n-mcp_macOS_arm64.pkg
           token: ${{ secrets.GITHUB_TOKEN }}
